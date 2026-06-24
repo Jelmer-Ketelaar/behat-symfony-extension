@@ -24,6 +24,8 @@ use FriendsOfBehat\SymfonyExtension\Context\Environment\Handler\ContextServiceEn
  */
 final class InitializedSymfonyExtensionEnvironment implements SymfonyExtensionEnvironment
 {
+    private const BEHAT_4_LATE_BOUND_CONTEXT_METHOD_CALLABLE = 'Behat\\Behat\\Context\\LateBoundContextMethodCallable';
+
     /** @var Suite */
     private $suite;
 
@@ -54,11 +56,34 @@ final class InitializedSymfonyExtensionEnvironment implements SymfonyExtensionEn
     {
         $callable = $callee->getCallable();
 
+        if ($this->isBehat4LateBoundContextMethodCallable($callable)) {
+            return $this->bindBehat4LateBoundContextMethodCallable($callable);
+        }
+
         if (is_array($callable) && $callee->isAnInstanceMethod()) {
             return [$this->getContext($callable[0]), $callable[1]];
         }
 
         return $callable;
+    }
+
+    /**
+     * @psalm-assert-if-true object $callable
+     */
+    private function isBehat4LateBoundContextMethodCallable(mixed $callable): bool
+    {
+        return is_object($callable) && is_a($callable, self::BEHAT_4_LATE_BOUND_CONTEXT_METHOD_CALLABLE);
+    }
+
+    private function bindBehat4LateBoundContextMethodCallable(object $callable): callable
+    {
+        /** @var object{contextClass: class-string<Context>} $callable */
+        $contextClass = $callable->contextClass;
+
+        /** @var callable(Context): callable $bindTo */
+        $bindTo = [$callable, 'bindTo'];
+
+        return $bindTo($this->getContext($contextClass));
     }
 
     #[\Override]
